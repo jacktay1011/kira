@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kira — Scan, split, done.</title>
+<meta name="theme-color" content="#0d9488"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Kira"/>
+<meta name="description" content="Scan your receipt, split the bill fairly."/>
+<link rel="manifest" href="/manifest.json"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',system-ui,sans-serif;background:#030a09;display:flex;justify-content:center;padding:24px 0;min-height:100vh}
+.app{max-width:420px;width:100%;min-height:620px;display:flex;flex-direction:column;background:#060e0d;border-radius:20px;overflow:hidden;border:0.5px solid rgba(255,255,255,0.07)}
+.hdr{background:rgba(255,255,255,0.02);border-bottom:0.5px solid rgba(255,255,255,0.06);padding:16px 20px 12px}
+.hdr-back{font-size:13px;color:#3d6e69;cursor:pointer;margin-bottom:6px;display:inline-flex;align-items:center;gap:4px}
+.hdr-back:hover{color:#2dd4bf}
+.hdr h2{font-size:20px;font-weight:600;color:#f0fdf9;letter-spacing:-0.025em}
+.hdr p{font-size:13px;color:#3d6e69;margin-top:2px}
+.steps{display:flex;gap:5px;padding:12px 20px 8px;background:rgba(255,255,255,0.02)}
+.step{flex:1;height:2px;border-radius:2px;background:rgba(255,255,255,0.08)}
+.step.on{background:#14b8a6}
+.body{flex:1;padding:16px 20px;overflow-y:auto}
+.footer{padding:14px 20px;background:rgba(255,255,255,0.02);border-top:0.5px solid rgba(255,255,255,0.06)}
+.inp{width:100%;padding:11px 14px;border:0.5px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;background:rgba(255,255,255,0.05);color:#f0fdf9;outline:none;font-family:inherit}
+.inp:focus{border-color:#14b8a6;box-shadow:0 0 0 2.5px rgba(20,184,166,0.2)}
+.inp::placeholder{color:#1a3330}
+input[type=range]{accent-color:#14b8a6;width:100%}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+const genId=()=>Math.random().toString(36).substr(2,8);
+const fmt=n=>'RM '+(+n||0).toFixed(2);
+const DEF={sc:10,sst:8,scOn:true,sstOn:true};
+const AC='#14b8a6',ACD='#0f766e',ACG='rgba(20,184,166,0.22)',ACB='rgba(20,184,166,0.07)';
+const T1='#f0fdf9',T2='#3d6e69',T3='#1a3330';
+const B1='rgba(255,255,255,0.06)',B2='rgba(255,255,255,0.11)';
+const CS=`background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px`;
+const BP=`width:100%;padding:15px;background:${ACD};color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:-0.01em;box-shadow:0 0 24px rgba(15,118,110,0.35)`;
+const BD=`width:100%;padding:15px;background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.18);border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:default;font-family:inherit`;
+const BG=`width:100%;padding:13px;background:transparent;border:0.5px solid rgba(255,255,255,0.1);border-radius:12px;font-size:14px;color:${T2};cursor:pointer;font-family:inherit`;
+const BR=`flex:1;padding:13px;background:rgba(127,29,29,0.28);color:#fca5a5;border:0.5px solid rgba(127,29,29,0.35);border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit`;
+const BK=`flex:1;padding:13px;background:transparent;border:0.5px solid rgba(255,255,255,0.1);border-radius:12px;font-size:14px;color:${T2};cursor:pointer;font-family:inherit`;
+
+const LOGO=`<svg width="62" height="62" viewBox="0 0 62 62" fill="none"><rect width="62" height="62" rx="17" fill="url(#lg)"/><rect x="16" y="8" width="24" height="32" rx="3" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.18)" stroke-width="1"/><line x1="12" y1="24" x2="50" y2="24" stroke="#99f6e4" stroke-width="1.5"/><line x1="20" y1="16" x2="32" y2="16" stroke="rgba(255,255,255,0.55)" stroke-width="1.5" stroke-linecap="round"/><line x1="20" y1="20" x2="28" y2="20" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-linecap="round"/><line x1="20" y1="29" x2="34" y2="29" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-linecap="round"/><line x1="20" y1="33" x2="26" y2="33" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-linecap="round"/><path d="M28 43 L28 54" stroke="white" stroke-width="2" stroke-linecap="round"/><path d="M22 49 L28 54 L34 49" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="lg" x1="0" y1="0" x2="62" y2="62"><stop offset="0%" stop-color="#134e4a"/><stop offset="100%" stop-color="#0d9488"/></linearGradient></defs></svg>`;
+const ICAM=`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>`;
+const IPEN=`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4z"/></svg>`;
+const IARR=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
+const IREC=`<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="rgba(20,184,166,0.3)" stroke-width="1.3" stroke-linecap="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 7h6M9 12h6M9 17h4"/></svg>`;
+const ISCAN=`<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(20,184,166,0.5)" stroke-width="1.3" stroke-linecap="round"><path d="M3 9V5a2 2 0 012-2h4M3 15v4a2 2 0 002 2h4M21 9V5a2 2 0 00-2-2h-4M21 15v4a2 2 0 01-2 2h-4"/><line x1="3" y1="12" x2="21" y2="12" stroke="rgba(20,184,166,0.9)" stroke-width="1.8"/></svg>`;
+const IWRN=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+const ICHK=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${AC}" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+
+function chip(l,sel,warn,fn){
+  const[bg,bd,cl,sh]=sel?[ACD,AC,'#fff',`box-shadow:0 0 10px ${ACG}`]:
+    warn?['rgba(245,158,11,0.1)','rgba(245,158,11,0.25)','#92400e','']:
+    ['rgba(255,255,255,0.05)','rgba(255,255,255,0.09)',T2,''];
+  return`<button onclick="${fn}" style="padding:5px 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:0.5px solid ${bd};background:${bg};color:${cl};${sh};font-family:inherit">${l}</button>`;
+}
+function tgl(on,fn){return`<button onclick="${fn}" style="width:46px;height:26px;border-radius:13px;position:relative;flex-shrink:0;border:none;padding:0;cursor:pointer;background:${on?AC:'rgba(255,255,255,0.12)'};${on?`box-shadow:0 0 10px ${ACG}`:''}"><span style="position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.5);pointer-events:none;display:block;transform:translateX(${on?20:0}px)"></span></button>`;}
+function avi(l){return`<div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#134e4a,${AC});display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#fff;flex-shrink:0">${l.toUpperCase()}</div>`;}
+
+function calcBill(){
+  const{people,items,charges}=state;
+  const assigned=items.filter(i=>i.to?.length>0),unassigned=items.filter(i=>!i.to?.length);
+  const subs=Object.fromEntries(people.map(p=>[p.id,0]));
+  assigned.forEach(it=>{const s=it.price/it.to.length;it.to.forEach(pid=>{if(pid in subs)subs[pid]+=s;});});
+  const results={};
+  people.forEach(p=>{const sub=subs[p.id]||0,sc=charges.scOn?sub*charges.sc/100:0,sst=charges.sstOn?(sub+sc)*charges.sst/100:0;results[p.id]={sub,sc,sst,total:sub+sc+sst};});
+  return{results,unassigned,totalBill:Object.values(results).reduce((a,r)=>a+r.total,0)};
+}
+
+function save(){try{localStorage.setItem('kira-v1',JSON.stringify({...state,expandedPeople:{},confirmingUnassigned:false}));}catch(e){}}
+function setState(p,ns){Object.assign(state,typeof p==='function'?p(state):p);render();if(!ns)save();}
+function stepOn(s){return['people','items','charges','summary'].indexOf(s)<=(['people','items','charges','summary']).indexOf(state.screen);}
+function Steps(){return`<div class="steps">${['people','items','charges','summary'].map(s=>`<div class="step${stepOn(s)?' on':''}"></div>`).join('')}</div>`;}
+
+let state={screen:'home',entryMode:null,people:[],items:[],charges:{...DEF},expandedPeople:{},confirmingUnassigned:false};
+
+function askReset(id){
+  const el=document.getElementById(id);if(!el)return;
+  el.outerHTML=`<div style="display:flex;gap:8px;width:100%"><button onclick="doReset()" style="${BR}">Clear &amp; start fresh</button><button onclick="render()" style="${BK}">Keep session</button></div>`;
+}
+function doReset(){state={screen:'home',entryMode:null,people:[],items:[],charges:{...DEF},expandedPeople:{},confirmingUnassigned:false};try{localStorage.removeItem('kira-v1');}catch(e){}render();}
+
+function HomeScreen(){
+  const{people,items}=state,has=people.length>0||items.length>0;
+  const resume=items.length>0?'items':people.length>0?'people':'people';
+  return`<div style="background:rgba(255,255,255,0.02);border-bottom:0.5px solid rgba(255,255,255,0.06);text-align:center;padding:36px 20px 28px">
+  ${LOGO}
+  <h1 style="font-size:28px;font-weight:700;color:${T1};letter-spacing:-0.04em;margin-top:14px">Kira</h1>
+  <p style="font-size:14px;color:${T2};margin-top:5px">Scan, split, done.</p>
+</div>
+<div class="body" style="display:flex;flex-direction:column;justify-content:center;gap:10px;padding-top:24px">
+${has?`<div style="${CS}">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px">
+    <div style="width:8px;height:8px;border-radius:50%;background:${AC};box-shadow:0 0 8px ${ACG}"></div>
+    <span style="font-weight:600;font-size:14px;color:${T1}">Session in progress</span>
+  </div>
+  <p style="font-size:13px;color:${T2};margin-bottom:14px;padding-left:18px">${people.length} people · ${items.length} item${items.length!==1?'s':''}</p>
+  <button onclick="setState({screen:'${resume}'})" style="${BP};margin-bottom:10px">Continue</button>
+  <button id="rh" onclick="askReset('rh')" style="${BG}">Start new session</button>
+</div>`:`
+<button onclick="setState({entryMode:'scan',screen:'scan'})" style="width:100%;padding:16px 18px;background:rgba(20,184,166,0.06);border:0.5px solid rgba(20,184,166,0.2);border-radius:14px;display:flex;align-items:center;gap:14px;cursor:pointer;text-align:left">
+  <div style="width:46px;height:46px;border-radius:12px;background:rgba(20,184,166,0.1);border:0.5px solid rgba(20,184,166,0.2);display:flex;align-items:center;justify-content:center;color:${AC};flex-shrink:0">${ICAM}</div>
+  <div style="flex:1"><div style="font-weight:600;font-size:15px;color:${T1}">Scan receipt</div><div style="font-size:12px;color:${T2};margin-top:2px">AI reads your receipt automatically</div></div>
+  <span style="color:${T3}">${IARR}</span>
+</button>
+<button onclick="setState({entryMode:'manual',screen:'people'})" style="width:100%;padding:16px 18px;background:rgba(255,255,255,0.03);border:0.5px solid rgba(255,255,255,0.07);border-radius:14px;display:flex;align-items:center;gap:14px;cursor:pointer;text-align:left">
+  <div style="width:46px;height:46px;border-radius:12px;background:rgba(255,255,255,0.05);border:0.5px solid rgba(255,255,255,0.09);display:flex;align-items:center;justify-content:center;color:${T2};flex-shrink:0">${IPEN}</div>
+  <div style="flex:1"><div style="font-weight:600;font-size:15px;color:${T1}">Enter manually</div><div style="font-size:12px;color:${T2};margin-top:2px">Type items in yourself</div></div>
+  <span style="color:${T3}">${IARR}</span>
+</button>`}
+</div>`;
+}
+
+function ScanScreen(){
+  return`<div class="hdr"><span class="hdr-back" onclick="setState({screen:'home',entryMode:null})">← Back</span><h2>Scan receipt</h2><p>AI extracts all items for you</p></div>
+<div class="body" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:360px">
+  <div id="scan-idle" style="width:100%">
+    <div onclick="document.getElementById('fi').click()" style="border:1.5px dashed rgba(20,184,166,0.28);border-radius:18px;padding:48px 24px;text-align:center;cursor:pointer;background:rgba(20,184,166,0.04)">
+      ${ISCAN}
+      <p style="font-weight:600;font-size:15px;color:${T1};margin-top:16px">Upload receipt photo</p>
+      <p style="font-size:13px;color:${T2};margin-top:5px">JPG · PNG · HEIC · any format</p>
+      <div style="margin-top:18px;display:inline-block;padding:9px 22px;background:${ACD};border-radius:20px;font-size:13px;font-weight:600;color:#fff;box-shadow:0 0 16px ${ACG}">Choose photo</div>
+    </div>
+    <input type="file" id="fi" accept="image/*" capture="environment" style="display:none" onchange="handleScan(this.files[0])"/>
+    <div id="scan-error" style="display:none;background:rgba(239,68,68,0.07);border:0.5px solid rgba(239,68,68,0.18);border-radius:10px;padding:11px 14px;font-size:13px;color:#fca5a5;margin-top:12px;line-height:1.5"></div>
+    <button onclick="setState({entryMode:'manual',screen:'people'})" style="${BG};margin-top:12px;font-size:13px">Skip — enter items manually</button>
+  </div>
+  <div id="scan-loading" style="display:none;text-align:center;padding:40px 0">
+    <div style="width:44px;height:44px;border:2.5px solid rgba(20,184,166,0.12);border-top-color:${AC};border-radius:50%;margin:0 auto 20px;animation:spin 0.8s linear infinite"></div>
+    <p style="font-weight:600;font-size:16px;color:${T1}">Reading receipt…</p>
+    <p style="font-size:13px;color:${T2};margin-top:6px">Extracting items with AI</p>
+  </div>
+</div>`;
+}
+
+function PeopleScreen(){
+  const{people,entryMode}=state;
+  return`<div class="hdr"><span class="hdr-back" onclick="setState({screen:entryMode==='scan'?'scan':'home'})">← Back</span><h2>Who's at the table?</h2><p>Add everyone splitting this bill</p></div>
+${Steps()}
+<div class="body">
+  <div style="display:flex;gap:8px;margin-bottom:14px">
+    <input class="inp" id="pi" placeholder="Name..." onkeydown="if(event.key==='Enter')addPerson()" style="flex:1"/>
+    <button onclick="addPerson()" style="padding:10px 16px;background:${ACD};color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 0 12px ${ACG}">Add</button>
+  </div>
+  ${people.map(p=>`<div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.03);border:0.5px solid ${B1};border-radius:12px;padding:11px 14px;margin-bottom:8px">
+    ${avi(p.name[0])}<span style="flex:1;font-size:14px;color:${T1}">${p.name}</span>
+    <button onclick="removePerson('${p.id}')" style="background:none;border:none;cursor:pointer;font-size:20px;color:${T3};line-height:1;padding:0 2px">×</button>
+  </div>`).join('')}
+  ${people.length===0?`<div style="text-align:center;padding:40px 20px;color:${T3}">${IREC}<p style="font-size:14px;margin-top:12px">No one added yet</p></div>`:''}
+</div>
+<div class="footer"><button ${people.length===0?`style="${BD}"`:`onclick="setState({screen:'items'})" style="${BP}"`}>Next — Items</button></div>`;
+}
+
+function ItemCard(it,people){
+  const isW=!it.to?.length,allOn=people.length>0&&people.every(p=>it.to?.includes(p.id));
+  const nc=isW?'#f59e0b':T1,pc=isW?'#d97706':T1,xc=isW?'rgba(245,158,11,0.4)':T3;
+  return`<div style="background:${isW?'rgba(245,158,11,0.05)':'rgba(255,255,255,0.04)'};border:0.5px solid ${isW?'rgba(245,158,11,0.18)':B1};border-radius:12px;padding:12px 14px;margin-bottom:8px">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+    <span style="flex:1;font-size:14px;font-weight:500;color:${nc};cursor:pointer" ondblclick="editItemName('${it.id}')" title="Double-click to edit">${it.name}</span>
+    <span style="font-size:14px;font-weight:600;color:${pc};cursor:pointer;white-space:nowrap" ondblclick="editItemPrice('${it.id}')" title="Double-click to edit">${fmt(it.price)}</span>
+    <button onclick="removeItem('${it.id}')" style="background:none;border:none;cursor:pointer;font-size:18px;color:${xc};line-height:1;padding:0 2px">×</button>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:5px">
+    ${people.length>1?chip('All',allOn,isW&&!allOn,`toggleAll('${it.id}')`):''}
+    ${people.map(p=>{const on=it.to?.includes(p.id)||false;return chip(p.name,on,isW&&!on,`togglePerson('${it.id}','${p.id}')`);}).join('')}
+  </div>
+  ${isW?`<p style="font-size:11px;color:rgba(245,158,11,0.5);margin-top:8px">Tap a name to assign this item</p>`:''}
+</div>`;
+}
+
+function ItemsScreen(){
+  const{people,items,entryMode}=state,un=items.filter(i=>!i.to?.length);
+  const scannedBadge=entryMode==='scan'&&items.length>0?`<div style="display:flex;align-items:center;gap:7px;background:${ACB};border:0.5px solid rgba(20,184,166,0.16);border-radius:9px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:${AC}">${ICHK}${items.length} items extracted — assign each to a person below</div>`:'';
+  const footer=state.confirmingUnassigned?`
+<div style="background:rgba(245,158,11,0.06);border:0.5px solid rgba(245,158,11,0.18);border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px">
+  ${IWRN}<div><p style="font-size:13px;font-weight:600;color:#f59e0b">${un.length} item${un.length>1?'s':''} unassigned</p><p style="font-size:12px;color:#d97706;margin-top:2px">These won't be counted. Continue anyway?</p></div>
+</div>
+<div style="display:flex;gap:8px">
+  <button onclick="setState({confirmingUnassigned:false},true)" style="${BG};flex:1;padding:12px">Go back</button>
+  <button onclick="setState({screen:'charges',confirmingUnassigned:false})" style="flex:1;padding:12px;background:${ACD};color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 0 16px ${ACG}">Continue anyway</button>
+</div>`:items.length===0?`<button style="${BD}">Next — Charges</button>`:`<button onclick="tryProceed()" style="${BP}">Next — Charges</button>`;
+  return`<div class="hdr"><span class="hdr-back" onclick="setState({screen:'people',confirmingUnassigned:false})">← Back</span><h2>Items & assignment</h2><p>Tap names to assign each item</p></div>
+${Steps()}
+<div class="body">
+  ${scannedBadge}
+  ${items.map(it=>ItemCard(it,people)).join('')}
+  <div id="add-form-area"><button onclick="showAddForm()" style="${BG};border-style:dashed;margin-top:4px">+ Add item</button></div>
+  ${items.length===0?`<div style="text-align:center;padding:40px 20px;color:${T3}">${IREC}<p style="font-size:14px;margin-top:12px">No items yet</p></div>`:''}
+</div>
+<div class="footer">${footer}</div>`;
+}
+
+function ChargeRow(key,label,hint,min,max){
+  const on=state.charges[key+'On'],val=state.charges[key];
+  return`<div style="${CS};margin-bottom:10px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${on?'14px':'0'}">
+    <div><p style="font-weight:600;font-size:14px;color:${T1}">${label}</p><p style="font-size:12px;color:${T2};margin-top:2px">${hint}</p></div>
+    ${tgl(on,`toggleCharge('${key}On')`)}
+  </div>
+  ${on?`<div style="display:flex;align-items:center;gap:8px">
+    <input type="range" min="${min}" max="${max}" step="0.5" value="${val}" oninput="setCharge('${key}',+this.value)" style="flex:1"/>
+    <button onclick="adjCharge('${key}',-0.5,${min},${max})" style="width:28px;height:28px;border:0.5px solid ${B2};border-radius:6px;background:rgba(255,255,255,0.04);color:${T1};cursor:pointer;font-size:17px;display:flex;align-items:center;justify-content:center;flex-shrink:0">−</button>
+    <span style="min-width:42px;text-align:center;font-size:14px;font-weight:600;color:${T1}">${val}%</span>
+    <button onclick="adjCharge('${key}',0.5,${min},${max})" style="width:28px;height:28px;border:0.5px solid ${B2};border-radius:6px;background:rgba(255,255,255,0.04);color:${T1};cursor:pointer;font-size:17px;display:flex;align-items:center;justify-content:center;flex-shrink:0">+</button>
+  </div>`:``}
+</div>`;
+}
+
+function ChargesScreen(){
+  const{charges,items}=state;
+  const sub=items.filter(i=>i.to?.length>0).reduce((a,i)=>a+(+i.price||0),0);
+  const sc=charges.scOn?sub*charges.sc/100:0,sst=charges.sstOn?(sub+sc)*charges.sst/100:0;
+  return`<div class="hdr"><span class="hdr-back" onclick="setState({screen:'items'})">← Back</span><h2>Taxes & charges</h2><p>As shown on your receipt</p></div>
+${Steps()}
+<div class="body">
+  ${ChargeRow('sc','Service charge','Common at restaurants (10%)',0,20)}
+  ${ChargeRow('sst','SST','Sales & Services Tax (6–8%)',0,15)}
+  <div style="background:${ACB};border:0.5px solid rgba(20,184,166,0.13);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:12px;color:rgba(20,184,166,0.75);line-height:1.6">SST applies on subtotal + service charge, matching Malaysian receipt standards. Both distributed proportionally per person.</div>
+  <div style="${CS}">
+    <p style="font-size:12px;font-weight:600;color:${T2};letter-spacing:0.06em;text-transform:uppercase;margin-bottom:12px">Preview</p>
+    <div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0;color:${T2}"><span>Food subtotal</span><span>${fmt(sub)}</span></div>
+    ${charges.scOn?`<div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0;color:${T2}"><span>Service charge (${charges.sc}%)</span><span>${fmt(sc)}</span></div>`:''}
+    ${charges.sstOn?`<div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0;color:${T2}"><span>SST (${charges.sst}%)</span><span>${fmt(sst)}</span></div>`:''}
+    <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:700;padding-top:12px;margin-top:6px;border-top:0.5px solid ${B1};letter-spacing:-0.02em"><span style="color:${T1}">Grand total</span><span style="color:${AC}">${fmt(sub+sc+sst)}</span></div>
+  </div>
+</div>
+<div class="footer"><button onclick="setState({screen:'summary'})" style="${BP}">See summary</button></div>`;
+}
+
+function SummaryScreen(){
+  const{people,items,charges,expandedPeople}=state;
+  const{results,unassigned,totalBill}=calcBill();
+  return`<div class="hdr"><span class="hdr-back" onclick="setState({screen:'charges'})">← Back</span><h2>Bill summary</h2><p>Grand total — <span style="color:${AC};font-weight:600">${fmt(totalBill)}</span></p></div>
+${Steps()}
+<div class="body">
+${people.map(p=>{
+  const r=results[p.id],pi=items.filter(i=>i.to?.includes(p.id)),open=expandedPeople[p.id];
+  return`<div style="background:rgba(255,255,255,0.04);border:0.5px solid ${B1};border-radius:14px;overflow:hidden;margin-bottom:8px">
+  <div onclick="toggleExpand('${p.id}')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer">
+    ${avi(p.name[0])}
+    <div style="flex:1"><p style="font-size:14px;font-weight:600;color:${T1}">${p.name}</p><p style="font-size:12px;color:${T2};margin-top:1px">${pi.length} item${pi.length!==1?'s':''} · ${open?'collapse':'tap to expand'}</p></div>
+    <span style="font-size:18px;font-weight:700;color:${AC};letter-spacing:-0.02em">${fmt(r.total)}</span>
+    <span style="color:${T3};font-size:10px;margin-left:6px">${open?'▲':'▼'}</span>
+  </div>
+  ${open?`<div style="padding:10px 16px 14px;border-top:0.5px solid ${B1}">
+    ${pi.map(it=>{const sh=it.price/it.to.length;return`<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;color:${T2}"><span>${it.name}${it.to.length>1?` <span style="font-size:11px;color:${T3}">÷${it.to.length}</span>`:''}</span><span>${fmt(sh)}</span></div>`;}).join('')}
+    <div style="border-top:0.5px solid ${B1};margin-top:10px;padding-top:10px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:${T2}"><span>Subtotal</span><span>${fmt(r.sub)}</span></div>
+      ${charges.scOn?`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:${T2}"><span>Service charge</span><span>${fmt(r.sc)}</span></div>`:''}
+      ${charges.sstOn?`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:${T2}"><span>SST</span><span>${fmt(r.sst)}</span></div>`:''}
+      <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:600;padding-top:8px;margin-top:4px;border-top:0.5px solid ${B1}"><span style="color:${T1}">Total</span><span style="color:${AC}">${fmt(r.total)}</span></div>
+    </div>
+  </div>`:''}
+</div>`;}).join('')}
+${unassigned.length>0?`<div style="background:rgba(245,158,11,0.05);border:0.5px solid rgba(245,158,11,0.16);border-radius:14px;padding:14px 16px;margin-bottom:8px">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">${IWRN}<p style="font-size:13px;font-weight:600;color:#f59e0b">Unassigned items — excluded</p></div>
+  ${unassigned.map(i=>`<div style="display:flex;justify-content:space-between;font-size:13px;color:#d97706;padding:3px 0"><span>${i.name}</span><span>${fmt(i.price)}</span></div>`).join('')}
+  <button onclick="setState({screen:'items'})" style="margin-top:10px;font-size:12px;color:rgba(245,158,11,0.6);background:none;border:none;cursor:pointer;text-decoration:underline;font-family:inherit">← Go back to assign</button>
+</div>`:''}
+</div>
+<div class="footer" style="display:flex;flex-direction:column;gap:8px">
+  <button onclick="shareSummary()" id="share-btn" style="${BP}">Share / copy summary</button>
+  <button id="rs" onclick="askReset('rs')" style="${BG}">Start new session</button>
+</div>`;
+}
+
+function render(){
+  const s=state.screen;
+  document.getElementById('app').innerHTML=s==='home'?HomeScreen():s==='scan'?ScanScreen():s==='people'?PeopleScreen():s==='items'?ItemsScreen():s==='charges'?ChargesScreen():SummaryScreen();
+  if(s==='people')setTimeout(()=>document.getElementById('pi')?.focus(),50);
+}
+function tryProceed(){const un=state.items.filter(i=>!i.to?.length);if(!un.length)setState({screen:'charges'});else setState({confirmingUnassigned:true},true);}
+function addPerson(){const inp=document.getElementById('pi'),name=(inp?.value||'').trim();if(!name)return;setState(s=>({people:[...s.people,{id:genId(),name}]}));setTimeout(()=>{const i=document.getElementById('pi');if(i){i.value='';i.focus();}},10);}
+function removePerson(id){setState(s=>({people:s.people.filter(p=>p.id!==id),items:s.items.map(i=>({...i,to:(i.to||[]).filter(p=>p!==id)}))}));}
+function togglePerson(iid,pid){setState(s=>({items:s.items.map(i=>{if(i.id!==iid)return i;const to=i.to||[];return{...i,to:to.includes(pid)?to.filter(p=>p!==pid):[...to,pid]};})}))}
+function toggleAll(iid){const{people,items}=state,it=items.find(i=>i.id===iid),allOn=people.every(p=>it.to?.includes(p.id));setState(s=>({items:s.items.map(i=>i.id===iid?{...i,to:allOn?[]:people.map(p=>p.id)}:i)}));}
+function removeItem(id){setState(s=>({items:s.items.filter(i=>i.id!==id)}));}
+function editItemName(id){const it=state.items.find(i=>i.id===id),n=prompt('Edit name:',it.name);if(n?.trim())setState(s=>({items:s.items.map(i=>i.id===id?{...i,name:n.trim()}:i)}));}
+function editItemPrice(id){const it=state.items.find(i=>i.id===id),v=prompt('Edit price (RM):',it.price),p=parseFloat(v);if(!isNaN(p)&&p>=0)setState(s=>({items:s.items.map(i=>i.id===id?{...i,price:p}:i)}));}
+function showAddForm(){
+  const a=document.getElementById('add-form-area');if(!a)return;
+  a.innerHTML=`<div style="background:rgba(255,255,255,0.04);border:0.5px solid ${AC};border-radius:12px;padding:14px;margin-top:4px">
+  <input class="inp" id="nn" placeholder="Item name" style="margin-bottom:8px" onkeydown="if(event.key==='Enter')document.getElementById('np').focus()"/>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:13px;color:${T2};white-space:nowrap">RM</span><input class="inp" id="np" type="number" step="0.01" placeholder="0.00" onkeydown="if(event.key==='Enter')subAdd()"/></div>
+  <div style="display:flex;gap:8px">
+    <button onclick="subAdd()" style="flex:1;padding:10px;background:${ACD};color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Add item</button>
+    <button onclick="render()" style="padding:10px 16px;border:0.5px solid ${B2};border-radius:10px;background:none;font-size:13px;color:${T2};cursor:pointer;font-family:inherit">Cancel</button>
+  </div></div>`;
+  setTimeout(()=>document.getElementById('nn')?.focus(),50);
+}
+function subAdd(){const n=(document.getElementById('nn')?.value||'').trim(),p=parseFloat(document.getElementById('np')?.value||'');if(!n||isNaN(p))return;setState(s=>({items:[...s.items,{id:genId(),name:n,price:p,to:[]}]}));}
+function toggleCharge(key){setState(s=>({charges:{...s.charges,[key]:!s.charges[key]}}));}
+function setCharge(key,val){state.charges[key]=val;render();save();}
+function adjCharge(key,d,min,max){state.charges[key]=Math.min(max,Math.max(min,Math.round((state.charges[key]+d)*10)/10));render();save();}
+function toggleExpand(pid){setState(s=>({expandedPeople:{...s.expandedPeople,[pid]:!s.expandedPeople[pid]}}));}
+function shareSummary(){
+  const{people,items,charges}=state,{results,unassigned,totalBill}=calcBill();
+  const date=new Date().toLocaleDateString('en-MY',{day:'numeric',month:'short',year:'numeric'});
+  const sep='─────────────────────';
+  const lines=[`Kira — ${date}`,sep,''];
+  people.forEach(p=>{
+    const r=results[p.id],pi=items.filter(i=>i.to?.includes(p.id));
+    lines.push(`${p.name}`);
+    pi.forEach(it=>{const sh=it.price/it.to.length;lines.push(`  ${it.name}${it.to.length>1?` (÷${it.to.length})`:''}   ${fmt(sh)}`);});
+    if(charges.scOn)lines.push(`  Service charge   ${fmt(r.sc)}`);
+    if(charges.sstOn)lines.push(`  SST   ${fmt(r.sst)}`);
+    lines.push(`  Total: ${fmt(r.total)}`,'');
+  });
+  lines.push(sep,`Grand total: ${fmt(totalBill)}`);
+  if(unassigned.length)lines.push('',`Note: ${unassigned.length} item(s) unassigned — not included`);
+  const text=lines.join('\n');
+  if(navigator.share)navigator.share({title:'Kira',text});
+  else navigator.clipboard.writeText(text).then(()=>{const b=document.getElementById('share-btn');if(b){const o=b.textContent;b.textContent='Copied!';setTimeout(()=>b.textContent=o,2000);}}).catch(()=>alert(text));
+}
+
+async function handleScan(file){
+  if(!file)return;
+  const idle=document.getElementById('scan-idle'),load=document.getElementById('scan-loading'),err=document.getElementById('scan-error');
+  if(idle)idle.style.display='none';if(load)load.style.display='block';
+  try{
+    const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
+    const resp=await fetch('/api/scan',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image:b64,mediaType:file.type||'image/jpeg'})
+    });
+    const data=await resp.json();
+    if(!resp.ok)throw new Error(data.error||'Scan failed');
+    const txt=data.content?.find(c=>c.type==='text')?.text||'';
+    const parsed=JSON.parse(txt.replace(/```json|```/g,'').trim());
+    if(!Array.isArray(parsed)||!parsed.length)throw new Error('No items found');
+    setState(s=>({items:[...s.items,...parsed.map(i=>({id:genId(),name:String(i.name),price:+i.price||0,to:[]}))],screen:'people'}));
+  }catch(e){
+    if(idle)idle.style.display='block';if(load)load.style.display='none';
+    if(err){err.textContent='Could not read receipt: '+(e.message||'unknown error')+'. Try a clearer photo or enter manually.';err.style.display='block';}
+  }
+}
+
+(()=>{
+  try{const raw=localStorage.getItem('kira-v1');if(raw){const d=JSON.parse(raw);['people','items','screen','entryMode'].forEach(k=>{if(d[k])state[k]=d[k];});if(d.charges)state.charges={...DEF,...d.charges};}}catch(e){}
+  render();
+})();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js');});
+}
+</script>
+</body>
+</html>
