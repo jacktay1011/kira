@@ -193,7 +193,25 @@ function ItemCard(it,people){
 
 function ItemsScreen(){
   const{people,items,entryMode}=state,un=items.filter(i=>!i.to?.length);
+  const totalAmt=items.reduce((a,i)=>a+(+i.price||0),0);
+  const assignedAmt=items.filter(i=>i.to?.length>0).reduce((a,i)=>a+(+i.price||0),0);
+  const unassignedAmt=totalAmt-assignedAmt;
   const scannedBadge=entryMode==='scan'&&items.length>0?`<div style="display:flex;align-items:center;gap:7px;background:${ACB};border:0.5px solid rgba(20,184,166,0.16);border-radius:9px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:${AC}">${ICHK}${items.length} items extracted — assign each to a person below</div>`:'';
+  const subtotalBar=items.length>0?`
+<div style="background:rgba(255,255,255,0.03);border:0.5px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px 14px;margin-top:12px;margin-bottom:4px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${unassignedAmt>0&&unassignedAmt<totalAmt?'8px':'0'}">
+    <span style="font-size:13px;color:${T2}">Subtotal (before taxes)</span>
+    <span style="font-size:15px;font-weight:700;color:${T1};letter-spacing:-0.02em">${fmt(totalAmt)}</span>
+  </div>
+  ${unassignedAmt>0&&totalAmt>0?`<div style="display:flex;gap:0;border-radius:6px;overflow:hidden;height:4px;margin-bottom:8px">
+    <div style="width:${((assignedAmt/totalAmt)*100).toFixed(1)}%;background:${AC};transition:width 0.3s"></div>
+    <div style="flex:1;background:rgba(245,158,11,0.3)"></div>
+  </div>
+  <div style="display:flex;justify-content:space-between">
+    <span style="font-size:11px;color:${T2}">Assigned <span style="color:${AC};font-weight:600">${fmt(assignedAmt)}</span></span>
+    <span style="font-size:11px;color:#d97706">Unassigned <span style="font-weight:600">${fmt(unassignedAmt)}</span></span>
+  </div>`:unassignedAmt===0&&totalAmt>0?`<div style="display:flex;align-items:center;gap:5px;margin-top:2px"><div style="width:8px;height:8px;border-radius:50%;background:${AC}"></div><span style="font-size:11px;color:${T2}">All items assigned</span></div>`:''}
+</div>`:'';
   const footer=state.confirmingUnassigned?`
 <div style="background:rgba(245,158,11,0.06);border:0.5px solid rgba(245,158,11,0.18);border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px">
   ${IWRN}<div><p style="font-size:13px;font-weight:600;color:#f59e0b">${un.length} item${un.length>1?'s':''} unassigned</p><p style="font-size:12px;color:#d97706;margin-top:2px">These won't be counted. Continue anyway?</p></div>
@@ -209,6 +227,7 @@ ${Steps()}
   ${items.map(it=>ItemCard(it,people)).join('')}
   <div id="add-form-area"><button onclick="showAddForm()" style="${BG};border-style:dashed;margin-top:4px">+ Add item</button></div>
   ${items.length===0?`<div style="text-align:center;padding:40px 20px;color:${T3}">${IREC}<p style="font-size:14px;margin-top:12px">No items yet</p></div>`:''}
+  ${subtotalBar}
 </div>
 <div class="footer">${footer}</div>`;
 }
